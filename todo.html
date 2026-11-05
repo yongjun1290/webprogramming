@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="ko" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskFlow Pro - 일정 & 할 일 관리</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans KR', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts & Lucide Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* Custom styles & Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.4);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.7);
+        }
+        .completed-strike {
+            text-decoration: line-through;
+            opacity: 0.55;
+        }
+        /* Touch friendly transition */
+        .task-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .task-card:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="h-full bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
+    <div id="app" class="min-h-full flex flex-col">
+        <!-- 상단 헤더 -->
+        <header class="sticky top-0 z-20 backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 transition-colors">
+            <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+                        <i data-lucide="check-square" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg leading-none text-slate-900 dark:text-white">TaskFlow</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">스마트 할 일 & 일정 관리</p>
+                    </div>
+                </div>
+
+                <!-- 우측 제어 영역 (날짜, 테마 토글, 추가 버튼) -->
+                <div class="flex items-center gap-3">
+                    <span id="current-date" class="hidden md:inline-block text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        <!-- 날짜 출력 -->
+                    </span>
+                    
+                    <button id="theme-toggle" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors" title="테마 변경">
+                        <i id="theme-icon-sun" data-lucide="sun" class="w-5 h-5 hidden"></i>
+                        <i id="theme-icon-moon" data-lucide="moon" class="w-5 h-5"></i>
+                    </button>
+
+                    <button id="btn-open-add-modal" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-xl shadow-md shadow-blue-500/20 transition-all active:scale-95">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">새 할 일 추가</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 메인 콘텐츠 컨테이너 -->
+        <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
+            
+            <!-- 진행률 대시보드 카드리스트 -->
+            <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- 전체 진행률 -->
+                <div class="bg-white dark:bg-slate-800/80 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">전체 달성률</span>
+                        <div class="p-2 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-lg">
+                            <i data-lucide="trending-up" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-baseline justify-between mb-2">
+                            <span id="completion-rate" class="text-3xl font-extrabold text-slate-900 dark:text-white">0%</span>
+                            <span id="task-counts" class="text-xs font-medium text-slate-500 dark:text-slate-400">0 / 0 완료</span>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                            <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full transition-all duration-500 w-0"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 오늘 마감 예정 -->
+                <div class="bg-white dark:bg-slate-800/80 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">오늘 마감</span>
+                        <div class="p-2 bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 rounded-lg">
+                            <i data-lucide="clock" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <span id="due-today-count" class="text-3xl font-extrabold text-slate-900 dark:text-white">0</span>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">오늘 안에 처리해야 할 일정</p>
+                    </div>
+                </div>
+
+                <!-- 중요 할 일 -->
+                <div class="bg-white dark:bg-slate-800/80 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">우선순위 높은 작업</span>
+                        <div class="p-2 bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 rounded-lg">
+                            <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <span id="high-priority-count" class="text-3xl font-extrabold text-slate-900 dark:text-white">0</span>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">높은 우선순위 미완료 항목</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 필터 & 검색 툴바 -->
+            <section class="bg-white dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
+                <!-- 검색창 -->
+                <div class="relative flex-1">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="search-input" placeholder="할 일 검색..." class="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                </div>
+
+                <!-- 필터 옵션 그룹 -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- 상태 필터 -->
+                    <div class="flex p-1 bg-slate-100 dark:bg-slate-900/60 rounded-xl text-xs font-medium">
+                        <button data-filter-status="all" class="filter-status-btn px-3 py-1.5 rounded-lg bg-white dark:bg-slate-700 shadow-xs text-blue-600 dark:text-blue-400 font-semibold transition-all">전체</button>
+                        <button data-filter-status="active" class="filter-status-btn px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 transition-all">진행중</button>
+                        <button data-filter-status="completed" class="filter-status-btn px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 transition-all">완료</button>
+                    </div>
+
+                    <!-- 카테고리 필터 -->
+                    <select id="category-filter" class="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="all">모든 카테고리</option>
+                        <option value="work">업무 (Work)</option>
+                        <option value="personal">개인 (Personal)</option>
+                        <option value="study">공부 (Study)</option>
+                        <option value="etc">기타 (Etc)</option>
+                    </select>
+
+                    <!-- 정렬 필터 -->
+                    <select id="sort-order" class="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="createdAt-desc">최신순</option>
+                        <option value="dueDate-asc">마감일 임박순</option>
+                        <option value="priority-desc">우선순위 높은순</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- 할 일 리스트 영역 -->
+            <section id="task-list-container" class="space-y-3 flex-1 min-h-[250px]">
+                <!-- 자바스크립트로 할 일 아이템 동적 생성 -->
+            </section>
+
+            <!-- 빈 상태 표시 (Empty State) -->
+            <div id="empty-state" class="hidden flex-col items-center justify-center py-16 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white/40 dark:bg-slate-800/20">
+                <div class="w-16 h-16 rounded-full bg-blue-50 dark:bg-slate-800 text-blue-500 flex items-center justify-center mb-3">
+                    <i data-lucide="clipboard-list" class="w-8 h-8"></i>
+                </div>
+                <h3 class="font-semibold text-slate-800 dark:text-slate-200 text-base">등록된 할 일이 없습니다</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">새로운 목표나 오늘 해결할 일정을 등록하여 생산성을 높여보세요!</p>
+            </div>
+        </main>
+
+        <!-- 모달: 할 일 추가 / 수정 -->
+        <div id="task-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-lg overflow-hidden transform scale-95 transition-transform duration-200" id="modal-card">
+                <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                    <h2 id="modal-title" class="text-base font-bold text-slate-900 dark:text-white">새 할 일 추가</h2>
+                    <button id="btn-close-modal" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <form id="task-form" class="p-6 space-y-4">
+                    <input type="hidden" id="task-id">
+
+                    <!-- 제목 입력 -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">할 일 제목 *</label>
+                        <input type="text" id="task-title-input" required placeholder="예: 분기 보고서 작성 및 검토" class="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <!-- 세부 설명 -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">상세 설명 / 메모</label>
+                        <textarea id="task-desc-input" rows="3" placeholder="필요한 추가 데이터나 참고 링크 등을 작성하세요." class="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+                    </div>
+
+                    <!-- 카테고리, 마감일, 우선순위 (그리드 배치) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">카테고리</label>
+                            <select id="task-category-input" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="work">업무</option>
+                                <option value="personal">개인</option>
+                                <option value="study">공부</option>
+                                <option value="etc">기타</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">마감일</label>
+                            <input type="date" id="task-duedate-input" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">우선순위</label>
+                            <select id="task-priority-input" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="low">낮음</option>
+                                <option value="medium" selected>보통</option>
+                                <option value="high">높음</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 저장/취소 버튼 -->
+                    <div class="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700/60">
+                        <button type="button" id="btn-cancel-modal" class="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">취소</button>
+                        <button type="submit" class="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 transition-all">저장하기</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 푸터 -->
+        <footer class="py-4 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">
+            TaskFlow &copy; 2026. All rights reserved.
+        </footer>
+    </div>
+
+    <!-- JavaScript 로직 -->
+    <script>
+        // 전역 상태 데이터
+        let tasks = [];
+        let filterStatus = 'all';
+        let filterCategory = 'all';
+        let searchQuery = '';
+        let sortOrder = 'createdAt-desc';
+
+        // 카테고리 맵핑 정보 (색상 및 이름)
+        const categoryConfig = {
+            work: { name: '업무', bg: 'bg-blue-100 dark:bg-blue-950/60', text: 'text-blue-700 dark:text-blue-300' },
+            personal: { name: '개인', bg: 'bg-emerald-100 dark:bg-emerald-950/60', text: 'text-emerald-700 dark:text-emerald-300' },
+            study: { name: '공부', bg: 'bg-purple-100 dark:bg-purple-950/60', text: 'text-purple-700 dark:text-purple-300' },
+            etc: { name: '기타', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300' }
+        };
+
+        // 우선순위 맵핑
+        const priorityConfig = {
+            high: { name: '높음', bg: 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900' },
+            medium: { name: '보통', bg: 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900' },
+            low: { name: '낮음', bg: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700' }
+        };
+
+        // DOM 요소 획득
+        const taskContainer = document.getElementById('task-list-container');
+        const emptyState = document.getElementById('empty-state');
+        const taskModal = document.getElementById('task-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const taskForm = document.getElementById('task-form');
+        const searchInput = document.getElementById('search-input');
+        const categoryFilterSelect = document.getElementById('category-filter');
+        const sortOrderSelect = document.getElementById('sort-order');
+
+        // 애플리케이션 초기화
+        window.addEventListener('DOMContentLoaded', () => {
+            initDateDisplay();
+            initTheme();
+            loadTasksFromStorage();
+            renderTasks();
+            setupEventListeners();
+        });
+
+        // 현재 날짜 표시
+        function initDateDisplay() {
+            const now = new Date();
+            const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' };
+            document.getElementById('current-date').textContent = now.toLocaleDateString('ko-KR', options);
+        }
+
+        // 테마 설정 (다크모드)
+        function initTheme() {
+            const savedTheme = localStorage.getItem('taskflow_theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('theme-icon-sun').classList.remove('hidden');
+                document.getElementById('theme-icon-moon').classList.add('hidden');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('theme-icon-sun').classList.add('hidden');
+                document.getElementById('theme-icon-moon').classList.remove('hidden');
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('taskflow_theme', isDark ? 'dark' : 'light');
+            document.getElementById('theme-icon-sun').classList.toggle('hidden', !isDark);
+            document.getElementById('theme-icon-moon').classList.toggle('hidden', isDark);
+        }
+
+        // 로컬스토리지 입출력
+        function loadTasksFromStorage() {
+            const data = localStorage.getItem('taskflow_tasks');
+            if (data) {
+                try {
+                    tasks = JSON.parse(data);
+                } catch (e) {
+                    tasks = [];
+                }
+            } else {
+                // 초깃값 데이터 예시
+                tasks = [
+                    {
+                        id: '1',
+                        title: '팀 프로젝트 핵심 기능 설계안 작성',
+                        desc: 'UI/UX 구성 요소 및 로컬 스토리지 연동 구조 정립하기',
+                        category: 'work',
+                        dueDate: new Date().toISOString().split('T')[0],
+                        priority: 'high',
+                        completed: false,
+                        createdAt: Date.now() - 3600000
+                    },
+                    {
+                        id: '2',
+                        title: '주간 운동 목표 달성 (헬스장 방문)',
+                        desc: '상체 근력 운동 및 유산소 30분 진행',
+                        category: 'personal',
+                        dueDate: '',
+                        priority: 'medium',
+                        completed: true,
+                        createdAt: Date.now() - 7200000
+                    }
+                ];
+                saveTasksToStorage();
+            }
+        }
+
+        function saveTasksToStorage() {
+            localStorage.setItem('taskflow_tasks', JSON.stringify(tasks));
+        }
+
+        // 이벤트 리스너 등록
+        function setupEventListeners() {
+            // 테마 토글
+            document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+
+            // 모달 열기/닫기
+            document.getElementById('btn-open-add-modal').addEventListener('click', () => openModal());
+            document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+            document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
+
+            // 모달 외부 클릭 시 닫기
+            taskModal.addEventListener('click', (e) => {
+                if (e.target === taskModal) closeModal();
+            });
+
+            // 폼 제출
+            taskForm.addEventListener('submit', handleFormSubmit);
+
+            // 검색어 입력
+            searchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value.trim().toLowerCase();
+                renderTasks();
+            });
+
+            // 상태 필터 버튼그룹
+            document.querySelectorAll('.filter-status-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.filter-status-btn').forEach(b => {
+                        b.classList.remove('bg-white', 'dark:bg-slate-700', 'shadow-xs', 'text-blue-600', 'dark:text-blue-400', 'font-semibold');
+                        b.classList.add('text-slate-600', 'dark:text-slate-400');
+                    });
+                    
+                    e.target.classList.add('bg-white', 'dark:bg-slate-700', 'shadow-xs', 'text-blue-600', 'dark:text-blue-400', 'font-semibold');
+                    e.target.classList.remove('text-slate-600', 'dark:text-slate-400');
+
+                    filterStatus = e.target.getAttribute('data-filter-status');
+                    renderTasks();
+                });
+            });
+
+            // 카테고리 & 정렬 선택
+            categoryFilterSelect.addEventListener('change', (e) => {
+                filterCategory = e.target.value;
+                renderTasks();
+            });
+
+            sortOrderSelect.addEventListener('change', (e) => {
+                sortOrder = e.target.value;
+                renderTasks();
+            });
+        }
+
+        // 대시보드 통계 계산 및 업데이트
+        function updateDashboard() {
+            const total = tasks.length;
+            const completed = tasks.filter(t => t.completed).length;
+            const rate = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+            document.getElementById('completion-rate').textContent = `${rate}%`;
+            document.getElementById('task-counts').textContent = `${completed} / ${total} 완료`;
+            document.getElementById('progress-bar').style.width = `${rate}%`;
+
+            // 오늘 마감 건수
+            const todayStr = new Date().toISOString().split('T')[0];
+            const dueToday = tasks.filter(t => !t.completed && t.dueDate === todayStr).length;
+            document.getElementById('due-today-count').textContent = dueToday;
+
+            // 높은 우선순위 건수
+            const highPriority = tasks.filter(t => !t.completed && t.priority === 'high').length;
+            document.getElementById('high-priority-count').textContent = highPriority;
+        }
+
+        // 할 일 리스트 렌더링
+        function renderTasks() {
+            updateDashboard();
+
+            // 필터링 적용
+            let filtered = tasks.filter(task => {
+                // 상태
+                if (filterStatus === 'active' && task.completed) return false;
+                if (filterStatus === 'completed' && !task.completed) return false;
+                
+                // 카테고리
+                if (filterCategory !== 'all' && task.category !== filterCategory) return false;
+
+                // 검색어
+                if (searchQuery) {
+                    const titleMatch = task.title.toLowerCase().includes(searchQuery);
+                    const descMatch = task.desc && task.desc.toLowerCase().includes(searchQuery);
+                    if (!titleMatch && !descMatch) return false;
+                }
+
+                return true;
+            });
+
+            // 정렬 적용
+            filtered.sort((a, b) => {
+                if (sortOrder === 'createdAt-desc') {
+                    return b.createdAt - a.createdAt;
+                } else if (sortOrder === 'dueDate-asc') {
+                    if (!a.dueDate) return 1;
+                    if (!b.dueDate) return -1;
+                    return new Date(a.dueDate) - new Date(b.dueDate);
+                } else if (sortOrder === 'priority-desc') {
+                    const priorityWeight = { high: 3, medium: 2, low: 1 };
+                    return priorityWeight[b.priority] - priorityWeight[a.priority];
+                }
+                return 0;
+            });
+
+            // UI 표시 제어
+            if (filtered.length === 0) {
+                taskContainer.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+
+                taskContainer.innerHTML = filtered.map(task => {
+                    const cat = categoryConfig[task.category] || categoryConfig.etc;
+                    const pri = priorityConfig[task.priority] || priorityConfig.medium;
+                    
+                    // 마감일 포맷팅 및 경고 표시
+                    let dueDateHtml = '';
+                    if (task.dueDate) {
+                        const today = new Date().toISOString().split('T')[0];
+                        const isOverdue = !task.completed && task.dueDate < today;
+                        const isToday = task.dueDate === today;
+
+                        let badgeColor = 'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400';
+                        if (isOverdue) badgeColor = 'text-rose-600 bg-rose-50 dark:bg-rose-950/60 font-semibold';
+                        else if (isToday) badgeColor = 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 font-semibold';
+
+                        dueDateHtml = `
+                            <span class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md ${badgeColor}">
+                                <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                                ${task.dueDate} ${isOverdue ? '(지연)' : isToday ? '(오늘 마감)' : ''}
+                            </span>
+                        `;
+                    }
+
+                    return `
+                        <div class="task-card bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/60 shadow-xs flex items-start gap-3.5 group">
+                            <!-- 체크박스 -->
+                            <button onclick="toggleTaskComplete('${task.id}')" class="mt-0.5 flex-shrink-0 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${task.completed ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 hover:border-blue-500'}">
+                                ${task.completed ? '<i data-lucide="check" class="w-4 h-4 stroke-[3]"></i>' : ''}
+                            </button>
+
+                            <!-- 콘텐츠 본문 -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between gap-2">
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 break-words ${task.completed ? 'completed-strike' : ''}">
+                                        ${escapeHtml(task.title)}
+                                    </h4>
+                                    
+                                    <!-- 액션 버튼 그룹 (수정/삭제) -->
+                                    <div class="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onclick="openModal('${task.id}')" class="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="수정">
+                                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                        </button>
+                                        <button onclick="deleteTask('${task.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="삭제">
+                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                ${task.desc ? `<p class="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 ${task.completed ? 'opacity-50' : ''}">${escapeHtml(task.desc)}</p>` : ''}
+
+                                <!-- 태그 정보들 (카테고리, 마감일, 우선순위) -->
+                                <div class="flex flex-wrap items-center gap-2 mt-3">
+                                    <span class="text-xs px-2.5 py-1 rounded-md font-medium ${cat.bg} ${cat.text}">
+                                        ${cat.name}
+                                    </span>
+                                    <span class="text-xs px-2.5 py-1 rounded-md font-medium border ${pri.bg}">
+                                        우선순위: ${pri.name}
+                                    </span>
+                                    ${dueDateHtml}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Lucide 아이콘 새로고침
+            lucide.createIcons();
+        }
+
+        // 완료 상태 변경
+        function toggleTaskComplete(id) {
+            tasks = tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
+            saveTasksToStorage();
+            renderTasks();
+        }
+
+        // 삭제
+        function deleteTask(id) {
+            tasks = tasks.filter(t => t.id !== id);
+            saveTasksToStorage();
+            renderTasks();
+        }
+
+        // 모달 관련 동작
+        function openModal(id = null) {
+            const taskIdInput = document.getElementById('task-id');
+            const titleInput = document.getElementById('task-title-input');
+            const descInput = document.getElementById('task-desc-input');
+            const categoryInput = document.getElementById('task-category-input');
+            const dueDateInput = document.getElementById('task-duedate-input');
+            const priorityInput = document.getElementById('task-priority-input');
+
+            if (id) {
+                // 수정 모드
+                const task = tasks.find(t => t.id === id);
+                if (!task) return;
+
+                modalTitle.textContent = '할 일 수정';
+                taskIdInput.value = task.id;
+                titleInput.value = task.title;
+                descInput.value = task.desc || '';
+                categoryInput.value = task.category;
+                dueDateInput.value = task.dueDate || '';
+                priorityInput.value = task.priority;
+            } else {
+                // 생성 모드
+                modalTitle.textContent = '새 할 일 추가';
+                taskForm.reset();
+                taskIdInput.value = '';
+                dueDateInput.value = new Date().toISOString().split('T')[0];
+            }
+
+            taskModal.classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('modal-card').classList.remove('scale-95');
+            document.getElementById('modal-card').classList.add('scale-100');
+            titleInput.focus();
+        }
+
+        function closeModal() {
+            taskModal.classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('modal-card').classList.remove('scale-100');
+            document.getElementById('modal-card').classList.add('scale-95');
+        }
+
+        // 폼 제출 핸들러 (추가 / 수정)
+        function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const id = document.getElementById('task-id').value;
+            const title = document.getElementById('task-title-input').value.trim();
+            const desc = document.getElementById('task-desc-input').value.trim();
+            const category = document.getElementById('task-category-input').value;
+            const dueDate = document.getElementById('task-duedate-input').value;
+            const priority = document.getElementById('task-priority-input').value;
+
+            if (!title) return;
+
+            if (id) {
+                // 수정
+                tasks = tasks.map(t => t.id === id ? {
+                    ...t,
+                    title,
+                    desc,
+                    category,
+                    dueDate,
+                    priority
+                } : t);
+            } else {
+                // 신규 생성
+                const newTask = {
+                    id: Date.now().toString(),
+                    title,
+                    desc,
+                    category,
+                    dueDate,
+                    priority,
+                    completed: false,
+                    createdAt: Date.now()
+                };
+                tasks.unshift(newTask);
+            }
+
+            saveTasksToStorage();
+            renderTasks();
+            closeModal();
+        }
+
+        // HTML 문자열 이스케이프 (XSS 방지)
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
